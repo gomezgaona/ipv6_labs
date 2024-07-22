@@ -1,0 +1,559 @@
+#!/bin/bash
+
+lab=$1
+function load_config () {
+	echo "Loading "$lab" configuration"
+	cp -r /home/frr/.lab_conf_files/"$lab"_conf/* /etc/routers/
+	sleep 1
+	echo "Configuration loaded successfully!"
+	sleep 1
+}
+function set_MAC (){
+	host=$1
+	interface=$2
+	MAC=$3
+	/home/frr/mininet/util/m $host ifconfig $interface hw ether $MAC
+}
+function delete_IPs () {
+	host=$1
+	interface=$2
+	ipv6_addr=$(/home/frr/mininet/util/m $host ifconfig | grep inet6 |head -1| awk '{print $2}')
+	ipv4_addr=$(/home/frr/mininet/util/m $host ifconfig | grep inet |head -1| awk '{print $2}')
+	ipv4_netmask=$(ifconfig | grep netmask |head -1| awk '{print $4}')
+	ipv6_prefix_len=$(ifconfig | grep prefixlen |head -1| awk '{print $4}')
+	#echo $ipv6_addr
+	case $ipv4_netmask in
+		255.255.255.252)
+		ipv4_prefix_len="30"
+		;;
+		255.255.255.0)
+		ipv4_prefix_len="24"
+		;;
+		255.255.0.0)
+		ipv4_prefix_len="16"
+		;;
+		255.0.0.0)
+		ipv4_prefix_len="8"
+		;;
+		*)
+		ipv4_prefix_len="32"
+	esac
+#	echo $ipv6_addr"/"$ipv6_prefix_len
+	/home/frr/mininet/util/m $host ip -6 addr del $ipv6_addr"/$ipv6_prefix_len" dev $interface #2> /dev/null 
+	/home/frr/mininet/util/m $host ip addr del $ipv4_addr"/$ipv4_prefix_len" dev $interface #2> /dev/null 
+}
+function delete_IPv4 () {
+	host=$1
+	interface=$2
+	ipv4_addr=$(/home/frr/mininet/util/m $host ifconfig | grep inet |head -1| awk '{print $2}')
+	# ipv4_netmask=$(ifconfig | grep netmask |head -1| awk '{print $4}')
+	ipv4_netmask=$(/home/frr/mininet/util/m $host ifconfig | grep netmask |head -1| awk '{print $4}')
+	case $ipv4_netmask in
+		255.255.255.252)
+		ipv4_prefix_len="30"
+		;;
+		255.255.255.0)
+		ipv4_prefix_len="24"
+		;;
+		255.255.0.0)
+		ipv4_prefix_len="16"
+		;;
+		255.0.0.0)
+		ipv4_prefix_len="8"
+		;;
+		*)
+		ipv4_prefix_len="32"
+	esac
+#	echo $ipv6_addr"/"$ipv6_prefix_len
+	/home/frr/mininet/util/m $host ip addr del $ipv4_addr"/$ipv4_prefix_len" dev $interface #2> /dev/null 
+}
+function delete_IPv6() {
+	host=$1
+	interface=$2
+	ipv6_addr=$(/home/frr/mininet/util/m $host ifconfig $interface | grep inet6 |head -1| awk '{print $2}')
+	ipv6_prefix_len=$(/home/frr/mininet/util/m $host ifconfig $interface | grep prefixlen |head -1| awk '{print $4}')
+	
+#	echo $ipv6_addr"/"$ipv6_prefix_len
+	/home/frr/mininet/util/m $host ip -6 addr del $ipv6_addr"/$ipv6_prefix_len" dev $interface #2> /dev/null 
+}
+function set_IPv6 () {
+	host=$1
+	interface=$2
+	IPv6=$3
+	/home/frr/mininet/util/m $host ip -6 addr add $IPv6 dev $interface #2> /dev/null 
+}
+#If not a root
+if (( $EUID != 0 )); then
+	echo "Please run this command as a root"
+	echo "Usage: \"sudo set_env <lab number>\""
+	echo "Example \"sudo set_env lab2\""
+	exit
+fi
+#If no arguments
+if [ $# -eq 0 ]; then
+	echo "No arguments provided"
+	echo "Usage: \"sudo set_env <lab number>\""
+	echo "Example \"sudo set_env lab2\""
+	exit
+fi
+
+case $lab in
+	lab1)
+	echo "This lab does not have any configuration file"
+	;;
+	lab2)
+	echo "This lab does not have any configuration file"
+	;;
+	lab3)
+	load_config
+	;;
+	lab4)
+	load_config
+	;;
+	lab5)
+	load_config
+	;;
+	lab6)
+	load_config
+	;;
+	lab7)
+	load_config
+	;;
+	lab8)
+	load_config
+	/usr/local/bin/set_bandwidth r1 r1-eth1 0.2
+	/usr/local/bin/set_bandwidth r1 r1-eth2 1
+	;;
+	lab9)
+	load_config
+	#Host h1 
+	delete_IPv4 h1 h1-eth0
+	set_IPv6 h1 h1-eth0 "2001:192:168:1::10/64"
+	set_MAC h1 h1-eth0 "00:00:00:00:01:10"
+	/home/frr/mininet/util/m h1 route add -A inet6 default gw 2001:192:168:1::1
+	#Host h2
+	delete_IPv4 h2 h2-eth0
+	set_IPv6 h2 h2-eth0 "2001:192:168:2::10/64"
+	set_MAC h2 h2-eth0 "00:00:00:00:02:10"
+	/home/frr/mininet/util/m h2 route add -A inet6 default gw 2001:192:168:2::1
+	#Router r1
+	set_IPv6 r1 r1-eth0 "2001:192:168:12::1/124"
+	set_IPv6 r1 r1-eth1 "2001:192:168:1::1/64"
+	set_MAC r1 r1-eth1 "00:00:00:00:01:01"
+	set_MAC r1 r1-eth0 "00:00:00:00:12:01"
+	/home/frr/mininet/util/m r1 sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
+	#Router r2
+	set_IPv6 r2 r2-eth0 "2001:192:168:12::2/124"
+	set_IPv6 r2 r2-eth1 "2001:192:168:23::1/124"
+	set_MAC r2 r2-eth0 "00:00:00:00:12:02"
+	set_MAC r2 r2-eth1 "00:00:00:00:23:01"
+	/home/frr/mininet/util/m r2 sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/mnull
+	#Router r3
+	set_IPv6 r3 r3-eth0 "2001:192:168:23::2/124"
+	set_IPv6 r3 r3-eth1 "2001:192:168:2::1/64"
+	set_MAC r3 r3-eth0 "00:00:00:00:23:02"
+	set_MAC r3 r3-eth1 "00:00:00:00:02:01"
+	/home/frr/mininet/util/m r3 sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+
+	;;
+	lab10)
+	load_config
+	#Host h1 
+	set_IPv6 h1 h1-eth0 "2001:192:168:1::10/64"
+	set_MAC h1 h1-eth0 "00:00:00:00:01:10"
+	/home/frr/mininet/util/m h1 route add -A inet6 default gw 2001:192:168:1::1
+	#Host h2
+	set_IPv6 h2 h2-eth0 "2001:192:168:2::10/64"
+	set_MAC h2 h2-eth0 "00:00:00:00:02:10"
+	/home/frr/mininet/util/m h2 route add -A inet6 default gw 2001:192:168:2::1
+	#Router r1
+	set_IPv6 r1 r1-eth0 "2001:192:168:12::1/124"
+	set_IPv6 r1 r1-eth1 "2001:192:168:1::1/64"
+	set_MAC r1 r1-eth1 "00:00:00:00:01:01"
+	set_MAC r1 r1-eth0 "00:00:00:00:12:01"
+	/home/frr/mininet/util/m r1 sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
+	#Router r2
+	set_IPv6 r2 r2-eth0 "2001:192:168:12::2/124"
+	set_IPv6 r2 r2-eth1 "2001:192:168:23::1/124"
+	set_MAC r2 r2-eth0 "00:00:00:00:12:02"
+	set_MAC r2 r2-eth1 "00:00:00:00:23:01"
+	/home/frr/mininet/util/m r2 sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/mnull
+	#Router r3
+	set_IPv6 r3 r3-eth0 "2001:192:168:23::2/124"
+	set_IPv6 r3 r3-eth1 "2001:192:168:2::1/64"
+	set_MAC r3 r3-eth0 "00:00:00:00:23:02"
+	set_MAC r3 r3-eth1 "00:00:00:00:02:01"
+	/home/frr/mininet/util/m r3 sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+	;;
+	exercise1)
+	load_config
+	;;
+	exercise2)
+	load_config
+	;;
+	exercise3)
+	load_config
+	#Host h1 
+	delete_IPv4 h1 h1-eth0 2> /dev/null
+	set_IPv6 h1 h1-eth0 "2001:173:17:1::10/64" 2> /dev/null
+	set_MAC h1 h1-eth0 "00:00:00:00:01:10" 2>/dev/null
+	/home/frr/mininet/util/m h1 route add -A inet6 default gw 2001:173:17:1::1 2> /dev/null
+	#Host h2
+	delete_IPv4 h2 h2-eth0 2> /dev/null
+	set_IPv6 h2 h2-eth0 "2001:173:17:2::10/64" 2> /dev/null
+	set_MAC h2 h2-eth0 "00:00:00:00:02:10" 2> /dev/null
+	/home/frr/mininet/util/m h2 route add -A inet6 default gw 2001:173:17:2::1 2> /dev/null
+	#Router r1
+	set_IPv6 r1 r1-eth0 "2001:173:17:12::1/124" 2> /dev/null
+	set_IPv6 r1 r1-eth1 "2001:173:17:1::1/64" 2> /dev/null
+	set_MAC r1 r1-eth1 "00:00:00:00:01:01" 2> /dev/null
+	set_MAC r1 r1-eth0 "00:00:00:00:12:01" 2> /dev/null
+	/home/frr/mininet/util/m r1 sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
+	#Router r2
+	set_IPv6 r2 r2-eth0 "2001:173:17:12::2/124" 2> /dev/null
+	set_IPv6 r2 r2-eth1 "2001:173:17:23::1/124" 2> /dev/null
+	set_MAC r2 r2-eth0 "00:00:00:00:12:02" 2> /dev/null
+	set_MAC r2 r2-eth1 "00:00:00:00:23:01" 2> /dev/null
+	/home/frr/mininet/util/m r2 sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
+	#Router r3
+	set_IPv6 r3 r3-eth0 "2001:173:17:23::2/124" 2> /dev/null
+	set_IPv6 r3 r3-eth1 "2001:173:17:2::1/64" 2> /dev/null
+	set_MAC r3 r3-eth0 "00:00:00:00:23:02" 2> /dev/null
+	set_MAC r3 r3-eth1 "00:00:00:00:02:01" 2> /dev/null
+	/home/frr/mininet/util/m r3 sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+	;;
+	ipv6_lab3)
+        load_config
+        # host h1
+        delete_IPv6 h1 h1-eth0 2> /dev/null
+        set_MAC h1 h1-eth0 "00:00:00:00:01:10" 2> /dev/null
+        # host h2
+        delete_IPv6 h2 h2-eth0 2> /dev/null
+        set_MAC h2 h2-eth0 "00:00:00:00:02:10" 2> /dev/null
+        # Router r1
+        delete_IPv6 r1 r1-eth0 2> /dev/null
+        delete_IPv6 r1 r1-eth1 2> /dev/null
+        set_MAC r1 r1-eth0 "00:00:00:00:01:01" 2> /dev/null
+        set_MAC r1 r1-eth1 "00:00:00:00:12:01" 2> /dev/null
+        /home/frr/mininet/util/m r1 sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+        ;;
+	ipv6_lab4)
+        # Method 1: SLAAC
+        /home/frr/mininet/util/m h1 ifconfig h1-eth0 0
+        /home/frr/mininet/util/m h1 ip -6 addr flush h1-eth0
+        set_IPv6 h1 h1-eth0 "fe80::01:10/64" 2> /dev/null
+        set_MAC h1 h1-eth0 "00:00:00:00:01:10" 2> /dev/null
+        ip -6 addr flush s1-eth1
+        ip -6 addr flush s1-eth2
+        /home/frr/mininet/util/m r1 ip -6 addr flush r1-eth0
+        set_IPv6 r1 r1-eth0 "fe80::1:1/64" 2> /dev/null
+        set_MAC r1 r1-eth0 "00:00:00:00:01:01" 2> /dev/null
+        /home/frr/mininet/util/m r1 sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+        ;;
+        ipv6_lab5)
+        load_config
+
+        # Method 2: SLAAC+Stateless DHCPv6
+        /home/frr/mininet/util/m h1 ifconfig h1-eth0 0
+        /home/frr/mininet/util/m h1 ip -6 addr flush h1-eth0
+        set_IPv6 h1 h1-eth0 "fe80::01:10/64" 2> /dev/null
+        set_MAC h1 h1-eth0 "00:00:00:00:01:10" 2> /dev/null
+        /home/frr/mininet/util/m h2 ifconfig h2-eth0 0
+        /home/frr/mininet/util/m h2 ip -6 addr flush h2-eth0
+        set_IPv6 h2 h2-eth0 "fe80::01:20/64" 2> /dev/null
+        set_MAC h2 h2-eth0 "00:00:00:00:01:20" 2> /dev/null
+        ip -6 addr flush s1-eth1
+        ip -6 addr flush s1-eth2
+        /home/frr/mininet/util/m r1 ip -6 addr flush r1-eth0
+        chmod 777 /var/lib/dhcp/dhcpd6.leases 
+        set_IPv6 r1 r1-eth0 "fe80::1:1/64" 2> /dev/null
+        set_MAC r1 r1-eth0 "00:00:00:00:01:01" 2> /dev/null
+        /home/frr/mininet/util/m r1 sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+        ;;
+        ipv6_lab6)
+        load_config
+
+        # Method 3: Stateful DHCPv6
+        /home/frr/mininet/util/m h1 ifconfig h1-eth0 0
+        /home/frr/mininet/util/m h1 ip -6 addr flush h1-eth0
+        set_IPv6 h1 h1-eth0 "fe80::01:10/64" 2> /dev/null
+        set_MAC h1 h1-eth0 "00:00:00:00:01:10" 2> /dev/null
+        /home/frr/mininet/util/m h2 ifconfig h2-eth0 0
+        /home/frr/mininet/util/m h2 ip -6 addr flush h2-eth0
+        set_IPv6 h2 h2-eth0 "fe80::01:20/64" 2> /dev/null
+        set_MAC h2 h2-eth0 "00:00:00:00:01:20" 2> /dev/null
+        ip -6 addr flush s1-eth1
+        ip -6 addr flush s1-eth2
+        /home/frr/mininet/util/m r1 ip -6 addr flush r1-eth0
+        chmod 777 /var/lib/dhcp/dhcpd6.leases 
+        set_IPv6 r1 r1-eth0 "fe80::1:1/64" 2> /dev/null
+        set_MAC r1 r1-eth0 "00:00:00:00:01:01" 2> /dev/null
+        /home/frr/mininet/util/m r1 sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+        /home/frr/mininet/util/m h2 ip -6 addr add 2001:db8:abcd:1::20/64 dev h2-eth0
+	;;
+	ipv6_lab7)
+        load_config
+        #Host Internal
+        delete_IPv4 h1 h1-eth0
+        delete_IPv6 h1 h1-eth0
+        set_IPv6 h1 h1-eth0 "fe80::1:10/64"
+        set_IPv6 h1 h1-eth0 "2001:db8:abcd:1::10/64"
+        set_MAC h1 h1-eth0 "00:00:00:00:1:10"
+        /home/frr/mininet/util/m h1 route add -A inet6 default gw 2001:db8:abcd:1::1
+        #Host h2
+        delete_IPv4 h2 h2-eth0
+        delete_IPv6 h2 h2-eth0
+        set_IPv6 h2 h2-eth0 "fe80::2:10/64"
+        set_IPv6 h2 h2-eth0 "2001:db8:abcd:2::10/64"
+        set_MAC h2 h2-eth0 "00:00:00:00:2:10"
+        /home/frr/mininet/util/m h2 route add -A inet6 default gw 2001:db8:abcd:2::1
+        # Router r1
+        delete_IPv6 r1 r1-eth0
+        set_MAC r1 r1-eth0 "00:00:00:00:12:1"
+        delete_IPv6 r1 r1-eth1
+        set_MAC r1 r1-eth1 "00:00:00:00:1:1"
+	# Router r2
+        delete_IPv6 r2 r2-eth0
+        set_MAC r2 r2-eth0 "00:00:00:00:2:1"
+        delete_IPv6 r2 r2-eth1
+        set_MAC r2 r2-eth1 "00:00:00:00:12:2"
+	;;
+	ipv6_lab8)
+        load_config
+        #Host h1
+        delete_IPv4 h1 h1-eth0
+        delete_IPv6 h1 h1-eth0
+        set_IPv6 h1 h1-eth0 "fe80::01:10/64"
+        set_IPv6 h1 h1-eth0 "2001:db8:abcd:1::10/64"
+        set_MAC h1 h1-eth0 "00:00:00:00:01:10"
+        /home/frr/mininet/util/m h1 route add -A inet6 default gw 2001:db8:abcd:1::1
+        #Host h2
+        delete_IPv4 h2 h2-eth0
+        delete_IPv6 h2 h2-eth0
+        set_IPv6 h2 h2-eth0 "fe80::2:10/64"
+        set_IPv6 h2 h2-eth0 "2001:db8:abcd:2::10/64"
+        set_MAC h2 h2-eth0 "00:00:00:00:02:10"
+        /home/frr/mininet/util/m h2 route add -A inet6 default gw 2001:db8:abcd:2::1
+        #Host h3
+        delete_IPv4 h3 h3-eth0
+        delete_IPv6 h3 h3-eth0
+        set_IPv6 h3 h3-eth0 "fe80::3:10/64"
+        set_IPv6 h3 h3-eth0 "2001:db8:abcd:3::10/64"
+        set_MAC h3 h3-eth0 "00:00:00:00:03:10"
+        /home/frr/mininet/util/m h3 route add -A inet6 default gw 2001:db8:abcd:3::1
+        #Router r1
+        delete_IPv6 r1 r1-eth0
+        delete_IPv6 r1 r1-eth1
+        delete_IPv6 r1 r1-eth2
+        set_MAC r1 r1-eth1 "00:00:00:00:13:01"
+        set_MAC r1 r1-eth0 "00:00:00:00:12:01"
+        set_MAC r1 r1-eth2 "00:00:00:00:01:01"
+        /home/frr/mininet/util/m r1 sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
+	#Router r2
+        delete_IPv6 r2 r2-eth0
+        delete_IPv6 r2 r2-eth1
+        delete_IPv6 r2 r2-eth2
+        set_MAC r2 r2-eth0 "00:00:00:00:12:02"
+        set_MAC r2 r2-eth1 "00:00:00:00:23:01"
+        set_MAC r2 r2-eth2 "00:00:00:00:02:01"
+        /home/frr/mininet/util/m r2 sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/mnull
+        #Router r3
+        delete_IPv6 r3 r3-eth0
+        delete_IPv6 r3 r3-eth1
+        delete_IPv6 r3 r3-eth2
+        set_MAC r3 r3-eth0 "00:00:00:00:03:01"
+        set_MAC r3 r3-eth1 "00:00:00:00:23:02"
+        set_MAC r3 r3-eth2 "00:00:00:00:13:02"
+        /home/frr/mininet/util/m r3 sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+	;;
+	ipv6_lab9)
+	load_config
+        #Host Internal
+       	delete_IPv4 h1 h1-eth0
+        delete_IPv6 h1 h1-eth0
+        set_IPv6 h1 h1-eth0 "fe80::1:10/64"
+        set_IPv6 h1 h1-eth0 "2001:db8:abcd:1::10/64"
+        set_MAC h1 h1-eth0 "00:00:00:00:1:10"
+        /home/frr/mininet/util/m h1 route add -A inet6 default gw 2001:db8:abcd:1::1
+	#Host h2
+        delete_IPv4 h2 h2-eth0
+        delete_IPv6 h2 h2-eth0
+        set_IPv6 h2 h2-eth0 "fe80::2:10/64"
+        set_IPv6 h2 h2-eth0 "2001:db8:abcd:2::10/64"
+        set_MAC h2 h2-eth0 "00:00:00:00:2:10"
+        /home/frr/mininet/util/m h2 route add -A inet6 default gw 2001:db8:abcd:2::1
+	# Router r1
+        delete_IPv6 r1 r1-eth0
+        set_MAC r1 r1-eth0 "00:00:00:00:1:1"
+        delete_IPv6 r1 r1-eth1
+        set_MAC r1 r1-eth1 "00:00:00:00:12:1"
+	# Router r2
+        delete_IPv6 r2 r2-eth0
+        set_MAC r2 r2-eth0 "00:00:00:00:2:1"
+	delete_IPv6 r2 r2-eth1
+        set_MAC r2 r2-eth1 "00:00:00:00:12:2"
+	;;
+	ipv6_lab10)
+        service apache2 stop 2> /dev/null
+	#Host 
+        delete_IPv4 Internal Internal-eth0
+        delete_IPv6 Internal Internal-eth0
+        set_IPv6 Internal Internal-eth0 "fe80::1:10/64"
+        set_IPv6 Internal Internal-eth0 "2001:db8:abcd:1::10/64"
+        set_MAC Internal Internal-eth0 "00:00:00:00:1:10"
+        /home/frr/mininet/util/m Internal route add -A inet6 default gw 2001:db8:abcd:1::1
+	#Host DNS
+        delete_IPv4 DNS DNS-eth0
+        delete_IPv6 DNS DNS-eth0
+        set_IPv6 DNS DNS-eth0 "fe80::2:10/64"
+        set_IPv6 DNS DNS-eth0 "2001:db8:abcd:2::10/64"
+        set_MAC DNS DNS-eth0 "00:00:00:00:2:10"
+        /home/frr/mininet/util/m DNS route add -A inet6 default gw 2001:db8:abcd:2::1
+	#Host Web
+        delete_IPv4 Web Web-eth0
+        delete_IPv6 Web Web-eth0
+        set_IPv6 Web Web-eth0 "fe80::2:20/64"
+        set_IPv6 Web Web-eth0 "2001:db8:abcd:2::20/64"
+        set_MAC Web Web-eth0 "00:00:00:00:2:20"
+        /home/frr/mininet/util/m Web route add -A inet6 default gw 2001:db8:abcd:2::1
+	#Host External
+        delete_IPv4 External External-eth0
+        delete_IPv6 External External-eth0
+        set_IPv6 External External-eth0 "fe80::3:10/64"
+        set_IPv6 External External-eth0 "2001:db8:abcd:3::10/64"
+        set_MAC External External-eth0 "00:00:00:00:3:10"
+        /home/frr/mininet/util/m External route add -A inet6 default gw 2001:db8:abcd:3::1
+	# Router r1
+        delete_IPv6 r1 r1-eth0
+        set_IPv6 r1 r1-eth0 "fe80::2:1/64"
+        set_IPv6 r1 r1-eth0 "2001:db8:abcd:2::1/64"
+        set_MAC r1 r1-eth0 "00:00:00:2:1"
+        delete_IPv6 r1 r1-eth1
+        set_IPv6 r1 r1-eth1 "fe80::3:1/64"
+        set_IPv6 r1 r1-eth1 "2001:db8:abcd:3::1/64"
+        set_MAC r1 r1-eth1 "00:00:00:00:3:1"
+        delete_IPv6 r1 r1-eth2
+        set_IPv6 r1 r1-eth2 "fe80::1:1/64"
+        set_IPv6 r1 r1-eth2 "2001:db8:abcd:1::1/64"
+        set_MAC r1 r1-eth2 "00:00:00:00:1:1"
+	/home/frr/mininet/util/m r1 sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
+	;;
+	ipv6_lab11)
+        load_config
+	delete_IPv4 h1 h1-eth0 2> /dev/null
+	delete_IPv4 h2 h2-eth0 2> /dev/null
+	delete_IPv6 r3 r3-eth0
+	delete_IPv6 r3 r3-eth1
+	;;
+	ipv6_lab12)
+	#Host h1
+        /home/frr/mininet/util/m h1 ifconfig h1-eth0 0
+        /home/frr/mininet/util/m h1 ip -6 addr flush h1-eth0
+	/home/frr/mininet/util/m h1 ip addr add 2001:db8::8/96 dev h1-eth0
+        set_MAC h1 h1-eth0 "00:00:00:00:01:10" 2> /dev/null
+	echo "Host h1 is configured with the IPv6 address 2001:db8::8/96"
+	#Host h2
+        /home/frr/mininet/util/m h2 ip -6 addr flush h2-eth0
+        /home/frr/mininet/util/m h2 ifconfig h2-eth0 203.0.113.16/24 
+        set_MAC h2 h2-eth0 "00:00:00:00:02:10" 2> /dev/null
+	echo "Host h2 is configured with the IPv4 address 203.0.113.16/24"
+	#Router r1
+        /home/frr/mininet/util/m r1 ip -6 addr flush r1-eth0
+        /home/frr/mininet/util/m r1 ip -6 addr flush r1-eth1
+        set_IPv6 r1 r1-eth0 "2001:db8::1/96" 2> /dev/null
+        set_MAC r1 r1-eth0 "00:00:00:00:01:01" 2> /dev/null
+       	/home/frr/mininet/util/m r1 ifconfig r1-eth1 203.0.113.1/24 2> /dev/null
+        set_MAC r1 r1-eth1 "00:00:00:00:11:01" 2> /dev/null
+	echo "The configuration was loaded successfully!"
+
+        /home/frr/mininet/util/m r1 sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+	;;
+	ipv6_lab13)
+	#IPv6 Client 
+        /home/frr/mininet/util/m h1 ifconfig h1-eth0 0
+        /home/frr/mininet/util/m h1 ip -6 addr flush h1-eth0
+		/home/frr/mininet/util/m h1 ifconfig h1-eth0 0
+		/home/frr/mininet/util/m h1 ip addr add 2001:db8::8/96 dev h1-eth0
+		/home/frr/mininet/util/m h1 ip addr add fe80::8/64 dev h1-eth0 scope link
+		/home/frr/mininet/util/m h1 route add -A inet6 default gw 2001:db8::1
+        set_MAC h1 h1-eth0 "00:00:00:00:01:10" 2> /dev/null
+		echo "The IPv6 Client h1 is configured with the IPv6 address 2001:db8::8/96"
+	#IPv6 Server
+        /home/frr/mininet/util/m h2 ip -6 addr flush h2-eth0
+		/home/frr/mininet/util/m h2 ip addr add 2001:db8::20/96 dev h2-eth0
+		/home/frr/mininet/util/m h2 ifconfig h2-eth0 0
+		/home/frr/mininet/util/m h2 ip addr add fe80::20/64 dev h2-eth0 scope link
+		/home/frr/mininet/util/m h2 route add -A inet6 default gw 2001:db8::1
+        set_MAC h2 h2-eth0 "00:00:00:00:02:10" 2> /dev/null
+		echo "The IPv6 Server h2 is configured with the IPv4 address 2001:db8::20/96"
+	#DNS64 Server
+        /home/frr/mininet/util/m h3 ip -6 addr flush h3-eth0
+		/home/frr/mininet/util/m h3 ip addr add 2001:db8::30/96 dev h3-eth0
+		/home/frr/mininet/util/m h3 ifconfig h3-eth0 0
+		/home/frr/mininet/util/m h3 ip addr add fe80::30/64 dev h3-eth0 scope link
+		/home/frr/mininet/util/m h3 route add -A inet6 default gw 2001:db8::1
+        set_MAC h3 h3-eth0 "00:00:00:00:03:10" 2> /dev/null
+		echo "The DNS64 Server h3 is configured with the IPv4 address 2001:db8::30/96"
+	#IPv4 Server
+        /home/frr/mininet/util/m h4 ip -6 addr flush h4-eth0
+        /home/frr/mininet/util/m h4 ifconfig h4-eth0 203.0.113.16/24 
+		/home/frr/mininet/util/m h4 route add default gw 203.0.113.1
+        set_MAC h4 h4-eth0 "00:00:00:00:04:10" 2> /dev/null
+		echo "The IPv4 Server h4 is configured with the IPv4 address 203.0.113.16/24"
+	
+	#Router r1
+        /home/frr/mininet/util/m r1 ip -6 addr flush r1-eth0
+        /home/frr/mininet/util/m r1 ip -6 addr flush r1-eth1
+        set_IPv6 r1 r1-eth1 "2001:db8::1/96" 2> /dev/null
+		/home/frr/mininet/util/m r1 ip addr add fe80::1/64 dev r1-eth0 scope link
+        set_MAC r1 r1-eth1 "00:00:00:00:01:01" 2> /dev/null
+       	/home/frr/mininet/util/m r1 ifconfig r1-eth0 203.0.113.1/24 2> /dev/null
+        set_MAC r1 r1-eth0 "00:00:00:00:11:01" 2> /dev/null
+		echo "The configuration was loaded successfully!"
+        /home/frr/mininet/util/m r1 sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+	;;	
+	ipv6_lab14)
+        load_config
+        #Host h1
+        delete_IPv4 h1 h1-eth0
+        delete_IPv6 h1 h1-eth0
+        set_IPv6 h1 h1-eth0 "fe80::01:10/64"
+        set_IPv6 h1 h1-eth0 "2001:db8:abcd:1::10/64"
+        set_MAC h1 h1-eth0 "00:00:00:00:01:10"
+        /home/frr/mininet/util/m h1 route add -A inet6 default gw 2001:db8:abcd:1::1
+        #Host h2
+        delete_IPv4 h2 h2-eth0
+        delete_IPv6 h2 h2-eth0
+        set_IPv6 h2 h2-eth0 "fe80::2:10/64"
+        set_IPv6 h2 h2-eth0 "2001:db8:abcd:2::10/64"
+        set_MAC h2 h2-eth0 "00:00:00:00:02:10"
+        /home/frr/mininet/util/m h2 route add -A inet6 default gw 2001:db8:abcd:2::1
+        #Host h3
+        delete_IPv4 h3 h3-eth0
+        delete_IPv6 h3 h3-eth0
+        set_IPv6 h3 h3-eth0 "fe80::3:10/64"
+        set_IPv6 h3 h3-eth0 "2001:db8:abcd:3::10/64"
+        set_MAC h3 h3-eth0 "00:00:00:00:03:10"
+		/home/frr/mininet/util/m h3 route add -A inet6 default gw 2001:db8:abcd:3::1
+		#Host h4
+        delete_IPv4 h4 h4-eth0
+        delete_IPv6 h4 h4-eth0
+        set_IPv6 h4 h4-eth0 "fe80::4:10/64"
+        set_IPv6 h4 h4-eth0 "2001:db8:abcd:4::10/64"
+        set_MAC h4 h4-eth0 "00:00:00:00:04:10"
+        /home/frr/mininet/util/m h4 route add -A inet6 default gw 2001:db8:abcd:4::1
+        #Router r1
+        /home/frr/mininet/util/m r1 sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/null
+		#Router r2
+        /home/frr/mininet/util/m r2 sysctl -w net.ipv6.conf.all.forwarding=1 > /dev/mnull
+        #Router r3
+        /home/frr/mininet/util/m r3 sysctl -w net.ipv6.conf.all.forwarding=1 >/dev/null
+	;;
+	*)
+	echo "Wrong argument"
+	echo "Usage: \"sudo set_env <lab or exercise number>\""
+	echo "Example \"sudo set_env lab2\""
+	;;
+esac
+
+

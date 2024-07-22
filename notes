@@ -1,0 +1,43 @@
+ip -6 addr add $IPv6 dev $interface
+h1 route add -A inet6 default gw 2001:192:168:1::1
+
+
+H1 configuration:
+> ip -6 addr add 2001:192:168:1::10/64 dev h1-eth0
+> ip -6 addr add fe80::10 dev h1-eth0
+> route add -A inet6 default gw 2001:192:168:1::1
+> ifconfig h1-eth0 hw ether 00:00:00:00:01:10 (do not do)
+
+H2 configuration:
+> ip -6 addr add 2001:192:168:1::20/64 dev h2-eth0
+> route add -A inet6 default gw 2001:192:168:1::1
+
+H3 configuration:
+> ip -6 addr add 2001:192:168:2::30/64 dev h3-eth0
+> route add -A inet6 default gw 2001:192:168:2::1
+
+H4 configuration:
+> ip -6 addr add 2001:192:168:2::40/64 dev h4-eth0
+> route add -A inet6 default gw 2001:192:168:2::1
+
+- Clear routers configurations
+R1 configuration:
+> ip -6 addr add 2001:192:168:1::1/64 dev r1-eth0
+> ip -6 addr add 2001:192:168:12::1/124 dev r1-eth1
+
+vtysh
+	> ipv6 route 2001:192:168:2::/64 2001:192:168:12::2
+
+R2 configuration:
+> ip -6 addr add 2001:192:168:2::1/64 dev r2-eth0
+> ip -6 addr add 2001:192:168:12::2/124 dev r2-eth1
+
+vtysh
+	> ipv6 route 2001:192:168:1::/64 2001:192:168:12::1
+
+Try on routers:
+sysctl -w net.ipv6.conf.add.forwarding=1
+sysctl -w net.ipv6.conf.add.forwarding=1
+
+vtysh
+	> ipv6 forwarding

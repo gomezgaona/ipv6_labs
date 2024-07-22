@@ -1,0 +1,27 @@
+!
+! Zebra configuration saved from vty
+!   2019/12/09 12:55:11
+!
+frr version 7.2-dev
+frr defaults traditional
+!
+hostname frr-pc
+!
+!
+!
+!
+interface r1-eth0
+ ip address 192.168.1.1/24
+!
+interface r1-eth1
+ ip address 192.168.12.1/30
+!
+interface r1-eth2
+ ip address 192.168.13.1/30
+!
+no ipv6 forwarding
+!
+!
+!
+line vty
+!
